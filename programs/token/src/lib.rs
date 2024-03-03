@@ -120,8 +120,8 @@ use concordium_cis2::*;
 use concordium_std::{collections::BTreeMap, EntrypointName, *};
 
 /// List of supported standards by this contract address.
-const SUPPORTS_STANDARDS: [StandardIdentifier<'static>; 2] =
-    [CIS0_STANDARD_IDENTIFIER, CIS2_STANDARD_IDENTIFIER];
+// const SUPPORTS_STANDARDS: [StandardIdentifier<'static>; 2] =
+//     [CIS0_STANDARD_IDENTIFIER, CIS2_STANDARD_IDENTIFIER];
 
 /// List of supported entrypoints by the `permit` function (CIS3 standard).
 const SUPPORTS_PERMIT_ENTRYPOINTS: [EntrypointName; 2] = [
@@ -752,7 +752,7 @@ impl State {
 /// account address). Account addresses on Concordium have account aliases. We
 /// call the alias 0 for every account the canonical account address.
 /// https://developer.concordium.software/en/mainnet/net/references/transactions.html#account-aliases
-fn get_canonical_address(address: Address) -> ContractResult<Address> {
+fn _get_canonical_address(address: Address) -> ContractResult<Address> {
     let canonical_address = match address {
         Address::Account(account) => Address::Account(
             account
@@ -1551,13 +1551,13 @@ fn contract_on_cis2_received(ctx: &ReceiveContext, host: &Host<State>) -> Contra
 )]
 fn contract_supports(
     ctx: &ReceiveContext,
-    host: &Host<State>,
+    _host: &Host<State>,
 ) -> ContractResult<SupportsQueryResponse> {
     // Parse the parameter.
     let params: SupportsQueryParams = ctx.parameter_cursor().get()?;
 
     // Build the response.
-    let mut response = Vec::with_capacity(params.queries.len());
+    let response = Vec::with_capacity(params.queries.len());
     // for std_id in params.queries {
     //     if SUPPORTS_STANDARDS.contains(&std_id.as_standard_identifier()) {
     //         response.push(SupportResult::Support);

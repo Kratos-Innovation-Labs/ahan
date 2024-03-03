@@ -1,0 +1,52 @@
+---
+name: PR Checks
+on:
+  pull_request:
+    branches:
+      - '*'
+  push:
+    branches:
+      - master
+
+jobs:
+  misc:
+    name: Miscellaneous checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        id: install-rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2024-02-05
+          components: clippy rustfmt miri
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Cache cargo-deny
+        id: cache-cargo-deny
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-deny
+          key: ${{ runner.os }}-${{ steps.install-rust.outputs.cachekey }}-cargo-deny
+
+      - name: Install cargo-deny
+        if: steps.cache-cargo-deny.outputs.cache-hit != 'true'
+        run: cargo install --locked cargo-deny
+
+      - name: Check bans
+        run: cargo-deny --all-features check bans
+
+      - name: Check Clippy (all features)
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features -- -D warnings

@@ -1,0 +1,23 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+authors = [ "dhruvja <dhruv@iamsizzling.com>" ]
+description = "sample project to test vaults"
+
+[workspace]
+members = [
+  "programs/*"
+]
+resolver = "2"
+
+[workspace.dependencies]
+concordium-std = {version = "10.0", default-features = false}
+concordium-cis2 = { version = "6.1.0" }
+concordium-smart-contract-testing = "4.0"
+
+mint_tokens = { path = "programs/token" }
+
+[profile.release]
+opt-level = "s"
+codegen-units = 1

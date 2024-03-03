@@ -1,0 +1,13 @@
+{ 
+  "amount": 10,
+  "contract_address": 8215,
+  "receiver": {
+    "Contract": [
+     {
+      "index": 8127,
+      "subindex": 0
+     },
+      "depositIntoContract"
+    ]
+  }
+}

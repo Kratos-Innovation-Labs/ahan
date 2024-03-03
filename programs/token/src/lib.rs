@@ -159,6 +159,7 @@ pub enum Event {
     #[concordium(tag = 250)]
     Nonce(NonceEvent),
     /// Cis2 token events.
+    #[allow(clippy::manual_range_patterns)]
     #[concordium(forward = cis2_events)]
     Cis2Event(Cis2Event<ContractTokenId, ContractTokenAmount>),
 }

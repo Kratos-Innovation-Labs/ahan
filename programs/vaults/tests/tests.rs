@@ -2,7 +2,7 @@ use concordium_cis2::{TokenAmountU16, TokenIdU8};
 use concordium_smart_contract_testing::*;
 use concordium_std::MetadataUrl;
 use mint_tokens::*;
-use vaults::{DepositParams, Error, State};
+use vaults::{DepositParams, Error, InitParams, State};
 // use vaults::*;
 
 const ACC_ADDR_OWNER: AccountAddress = AccountAddress([0u8; 32]);
@@ -32,19 +32,6 @@ fn setup_chain_and_contract() -> (
     let token_deployment = chain
         .module_deploy_v1(Signer::with_one_key(), ACC_ADDR_OWNER, token_module)
         .expect("Deploying valid module should succeed");
-    let vaults_initialization = chain
-        .contract_init(
-            Signer::with_one_key(),
-            ACC_ADDR_OWNER,
-            Energy::from(10000),
-            InitContractPayload {
-                mod_ref: vaults_deployment.module_reference,
-                init_name: OwnedContractName::new_unchecked("init_vaults".to_string()),
-                param: OwnedParameter::empty(),
-                amount: Amount::zero(),
-            },
-        )
-        .expect("Initialization should always succeed");
     let token_mint = TokenAmountU16(10000);
     let euro_token_initialization = chain
         .contract_init(
@@ -68,6 +55,23 @@ fn setup_chain_and_contract() -> (
                 mod_ref: token_deployment.module_reference,
                 init_name: OwnedContractName::new_unchecked("init_cis2_multi".to_string()),
                 param: OwnedParameter::from_serial(&token_mint).unwrap(),
+                amount: Amount::zero(),
+            },
+        )
+        .expect("Initialization should always succeed");
+    let vault_init_params = InitParams {
+        lp_token_contract: lp_token_initialization.contract_address,
+        euro_e_token_contract: euro_token_initialization.contract_address,
+    };
+    let vaults_initialization = chain
+        .contract_init(
+            Signer::with_one_key(),
+            ACC_ADDR_OWNER,
+            Energy::from(10000),
+            InitContractPayload {
+                mod_ref: vaults_deployment.module_reference,
+                init_name: OwnedContractName::new_unchecked("init_vaults".to_string()),
+                param: OwnedParameter::from_serial(&vault_init_params).unwrap(),
                 amount: Amount::zero(),
             },
         )

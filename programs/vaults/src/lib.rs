@@ -14,8 +14,15 @@ type Cis2ClientResult<T> = Result<T, Cis2ClientError<()>>;
 #[derive(Serialize, SchemaType, Debug, Clone)]
 pub struct State {
     pub balances: BTreeMap<AccountAddress, u64>,
+    pub lp_token_contract: ContractAddress,
+    pub euro_e_token_contract: ContractAddress,
 }
 
+#[derive(Serialize, SchemaType)]
+pub struct InitParams {
+    pub lp_token_contract: ContractAddress,
+    pub euro_e_token_contract: ContractAddress
+}
 #[derive(Serialize, SchemaType)]
 pub struct DepositParams {
     pub amount: u64,
@@ -73,14 +80,15 @@ pub enum Error {
 }
 
 /// Init function that creates a new smart contract.
-#[init(contract = "vaults")]
-fn init(_ctx: &InitContext, _state_builder: &mut StateBuilder) -> InitResult<State> {
+#[init(contract = "vaults", parameter = "InitParams")]
+fn init(ctx: &InitContext, _state_builder: &mut StateBuilder) -> InitResult<State> {
     // Your code
-    // call LP token contract and initialize it
-    // store EuroE contract address
+    let parameters: InitParams = ctx.parameter_cursor().get()?;
 
     Ok(State {
         balances: BTreeMap::new(),
+        lp_token_contract: parameters.lp_token_contract,
+        euro_e_token_contract: parameters.euro_e_token_contract
     })
 }
 
@@ -121,8 +129,8 @@ fn deposit(
     _logger: &mut impl HasLogger,
 ) -> ReceiveResult<()> {
     let params: DepositParams = ctx.parameter_cursor().get()?;
-    let cis2_contract_address = ContractAddress::new(params.contract_address, 0);
-    let cis2_client = Cis2Client::new(cis2_contract_address);
+    let state = host.state.clone();
+    let cis2_client = Cis2Client::new(state.euro_e_token_contract);
     ensure!(ctx.sender().is_account());
     let sender = match ctx.sender() {
         Address::Account(acc) => acc,
@@ -158,7 +166,7 @@ fn deposit(
         amount: concordium_cis2::TokenAmountU64(params.amount),
     };
     let res = host.invoke_contract(
-        &ContractAddress::new(2, 0),
+        &state.lp_token_contract,
         &mint_params,
         EntrypointName::new("mint").unwrap(),
         Amount::zero(),
@@ -211,8 +219,8 @@ fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
         Address::Contract(_) => bail!(),
     };
     let params: DepositParams = ctx.parameter_cursor().get()?;
-    let cis2_contract_address = ContractAddress::new(params.contract_address, 0);
-    let cis2_client = Cis2Client::new(cis2_contract_address);
+    let state = host.state.clone();
+    let cis2_client = Cis2Client::new(state.euro_e_token_contract);
 
     // Transfer tokens from the contract
     let res: Cis2ClientResult<bool> = cis2_client.transfer(
@@ -237,7 +245,7 @@ fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
         amount: concordium_cis2::TokenAmountU64(params.amount),
     };
     let res = host.invoke_contract(
-        &ContractAddress::new(2, 0),
+        &state.lp_token_contract,
         &mint_params,
         EntrypointName::new("burn").unwrap(),
         Amount::zero(),

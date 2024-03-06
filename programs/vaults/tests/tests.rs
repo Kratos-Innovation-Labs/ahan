@@ -32,7 +32,6 @@ fn setup_chain_and_contract() -> (
     let token_deployment = chain
         .module_deploy_v1(Signer::with_one_key(), ACC_ADDR_OWNER, token_module)
         .expect("Deploying valid module should succeed");
-    let token_mint = TokenAmountU16(10000);
     let euro_token_initialization = chain
         .contract_init(
             Signer::with_one_key(),
@@ -41,7 +40,7 @@ fn setup_chain_and_contract() -> (
             InitContractPayload {
                 mod_ref: token_deployment.module_reference,
                 init_name: OwnedContractName::new_unchecked("init_cis2_multi".to_string()),
-                param: OwnedParameter::from_serial(&token_mint).unwrap(),
+                param: OwnedParameter::from_serial(&false).unwrap(),
                 amount: Amount::zero(),
             },
         )
@@ -54,7 +53,7 @@ fn setup_chain_and_contract() -> (
             InitContractPayload {
                 mod_ref: token_deployment.module_reference,
                 init_name: OwnedContractName::new_unchecked("init_cis2_multi".to_string()),
-                param: OwnedParameter::from_serial(&token_mint).unwrap(),
+                param: OwnedParameter::from_serial(&true).unwrap(),
                 amount: Amount::zero(),
             },
         )
@@ -124,6 +123,21 @@ fn test_init() {
         .unwrap();
     let token_state: ViewState = from_bytes(&tokens.return_value).unwrap();
     println!("These are tokens {:?}", token_state.state);
+
+    // setting the vault address on lp token contract
+    let update = chain.contract_update(
+        Signer::with_one_key(),
+        ACC_ADDR_OWNER,
+        Address::Account(ACC_ADDR_OWNER),
+        Energy::from(100000),
+        UpdateContractPayload {
+            amount: Amount::zero(),
+            address: lp_token_init.contract_address,
+            receive_name: OwnedReceiveName::new_unchecked("cis2_multi.set_vault".to_string()),
+            message: OwnedParameter::from_serial(&vaults_init.contract_address).unwrap(),
+        },
+    );
+    assert!(update.is_ok(), "Setting vaults on lp token contract failed");
 
     let deposit_params = DepositParams {
         amount: DEPOSIT_AMOUNT,

@@ -2,7 +2,7 @@ use concordium_cis2::{TokenAmountU16, TokenIdU8};
 use concordium_smart_contract_testing::*;
 use concordium_std::MetadataUrl;
 use mint_tokens::*;
-use vaults::{DepositParams, Error, InitParams, State};
+use vaults::{Error, InitParams, State};
 // use vaults::*;
 
 const ACC_ADDR_OWNER: AccountAddress = AccountAddress([0u8; 32]);
@@ -139,15 +139,6 @@ fn test_init() {
     );
     assert!(update.is_ok(), "Setting vaults on lp token contract failed");
 
-    let deposit_params = DepositParams {
-        amount: DEPOSIT_AMOUNT,
-        receiver: concordium_cis2::Receiver::Contract(
-            vaults_init.contract_address,
-            OwnedEntrypointName::new("depositIntoContract".to_string()).unwrap(),
-        ),
-        contract_address: euro_token_init.contract_address.index,
-        token_id: TokenIdU8(1),
-    };
     let update = chain
         .contract_update(
             Signer::with_one_key(),
@@ -158,7 +149,7 @@ fn test_init() {
                 amount: Amount::zero(),
                 address: vaults_init.contract_address,
                 receive_name: OwnedReceiveName::new_unchecked("vaults.deposit".to_string()),
-                message: OwnedParameter::from_serial(&deposit_params).unwrap(),
+                message: OwnedParameter::from_serial(&DEPOSIT_AMOUNT).unwrap(),
             },
         )
         .print_emitted_events();
@@ -221,15 +212,6 @@ fn test_init() {
     );
     assert_eq!(user_deposit_balance, &DEPOSIT_AMOUNT);
 
-    let withdraw_params = DepositParams {
-        amount: WITHDRAW_AMOUNT,
-        receiver: concordium_cis2::Receiver::Contract(
-            vaults_init.contract_address,
-            OwnedEntrypointName::new("depositIntoContract".to_string()).unwrap(),
-        ),
-        contract_address: euro_token_init.contract_address.index,
-        token_id: TokenIdU8(1),
-    };
     let update = chain
         .contract_update(
             Signer::with_one_key(),
@@ -240,7 +222,7 @@ fn test_init() {
                 amount: Amount::zero(),
                 address: vaults_init.contract_address,
                 receive_name: OwnedReceiveName::new_unchecked("vaults.withdraw".to_string()),
-                message: OwnedParameter::from_serial(&withdraw_params).unwrap(),
+                message: OwnedParameter::from_serial(&WITHDRAW_AMOUNT).unwrap(),
             },
         )
         .print_emitted_events();

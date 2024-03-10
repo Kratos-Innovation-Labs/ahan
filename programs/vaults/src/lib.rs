@@ -23,13 +23,6 @@ pub struct InitParams {
     pub lp_token_contract: ContractAddress,
     pub euro_e_token_contract: ContractAddress
 }
-#[derive(Serialize, SchemaType)]
-pub struct DepositParams {
-    pub amount: u64,
-    pub receiver: Receiver,
-    pub contract_address: ContractIndex,
-    pub token_id: TokenIdU8,
-}
 
 /// The parameter type for the contract function `upgrade`.
 /// Takes the new module and optionally a migration function to call in the new
@@ -119,7 +112,7 @@ impl From<Cis2ClientError<()>> for Error {
 #[receive(
     contract = "vaults",
     name = "deposit",
-    parameter = "DepositParams",
+    parameter = "u64",
     mutable,
     enable_logger
 )]
@@ -128,7 +121,7 @@ fn deposit(
     host: &mut Host<State>,
     _logger: &mut impl HasLogger,
 ) -> ReceiveResult<()> {
-    let params: DepositParams = ctx.parameter_cursor().get()?;
+    let amount: u64 = ctx.parameter_cursor().get()?;
     let state = host.state.clone();
     let cis2_client = Cis2Client::new(state.euro_e_token_contract);
     ensure!(ctx.sender().is_account());
@@ -140,7 +133,7 @@ fn deposit(
     let res: Cis2ClientResult<bool> = cis2_client.transfer(
         host,
         Transfer {
-            amount: TokenAmountU64(params.amount),
+            amount: TokenAmountU64(amount),
             from: Address::Account(sender),
             to: Receiver::Contract(
                 ctx.self_address(),
@@ -163,7 +156,7 @@ fn deposit(
             hash: None,
         },
         token_id: TokenIdU8(01),
-        amount: concordium_cis2::TokenAmountU64(params.amount),
+        amount: concordium_cis2::TokenAmountU64(amount),
     };
     let res = host.invoke_contract(
         &state.lp_token_contract,
@@ -211,14 +204,14 @@ fn deposit_into_contract(ctx: &ReceiveContext, host: &mut Host<State>) -> Receiv
     Ok(())
 }
 
-#[receive(contract = "vaults", name = "withdraw", mutable)]
+#[receive(contract = "vaults", name = "withdraw", parameter = "u64", mutable)]
 fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
     ensure!(ctx.sender().is_account());
     let sender = match ctx.sender() {
         Address::Account(acc) => acc,
         Address::Contract(_) => bail!(),
     };
-    let params: DepositParams = ctx.parameter_cursor().get()?;
+    let amount: u64 = ctx.parameter_cursor().get()?;
     let state = host.state.clone();
     let cis2_client = Cis2Client::new(state.euro_e_token_contract);
 
@@ -226,7 +219,7 @@ fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
     let res: Cis2ClientResult<bool> = cis2_client.transfer(
         host,
         Transfer {
-            amount: TokenAmountU64(params.amount),
+            amount: TokenAmountU64(amount),
             from: Address::Contract(ctx.self_address()),
             to: Receiver::Account(sender),
             token_id: TokenIdU8(01),
@@ -242,7 +235,7 @@ fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
     let mint_params = BurnParams {
         owner: ctx.sender(),
         token_id: TokenIdU8(01),
-        amount: concordium_cis2::TokenAmountU64(params.amount),
+        amount: concordium_cis2::TokenAmountU64(amount),
     };
     let res = host.invoke_contract(
         &state.lp_token_contract,
@@ -273,7 +266,7 @@ fn withdraw(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
         .ok_or(Error::BalanceNotFound)?;
 
     *user_balance = user_balance
-        .checked_sub(u64::from(params.amount))
+        .checked_sub(u64::from(amount))
         .ok_or(Error::SubtractionUnderflow)?;
 
     Ok(())

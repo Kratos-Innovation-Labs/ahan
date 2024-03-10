@@ -1,9 +1,8 @@
-use concordium_cis2::{TokenAmountU16, TokenIdU8};
+use concordium_cis2::TokenIdU8;
 use concordium_smart_contract_testing::*;
 use concordium_std::MetadataUrl;
 use mint_tokens::*;
-use vaults::{Error, InitParams, State};
-// use vaults::*;
+use vaults::{Error, InitParams};
 
 const ACC_ADDR_OWNER: AccountAddress = AccountAddress([0u8; 32]);
 const ACC_ADDR_OTHER: AccountAddress = AccountAddress([1u8; 32]);
@@ -183,7 +182,7 @@ fn test_init() {
             },
         )
         .unwrap();
-    let vaults_state: State = from_bytes(&vaults_view.return_value).unwrap();
+    let vaults_state: vaults::ViewState = from_bytes(&vaults_view.return_value).unwrap();
     let user_deposit_balance = vaults_state
         .balances
         .get(&ACC_ADDR_OWNER)
@@ -257,7 +256,7 @@ fn test_init() {
             },
         )
         .unwrap();
-    let vaults_state: State = from_bytes(&vaults_view.return_value).unwrap();
+    let vaults_state: vaults::ViewState = from_bytes(&vaults_view.return_value).unwrap();
     let user_deposit_balance = vaults_state
         .balances
         .get(&ACC_ADDR_OWNER)

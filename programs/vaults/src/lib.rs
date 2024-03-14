@@ -554,7 +554,7 @@ fn deposit_impl(
                 contract_address,
                 OwnedEntrypointName::new(String::from("depositIntoContract")).unwrap(),
             ),
-            token_id: TokenIdU8(01),
+            token_id: TokenIdU8(0),
             data: AdditionalData::empty(),
         },
     );
@@ -619,7 +619,7 @@ fn withdraw_impl(
             amount: TokenAmountU64(amount),
             from: Address::Contract(contract_address),
             to: Receiver::Account(sender),
-            token_id: TokenIdU8(01),
+            token_id: TokenIdU8(0),
             data: AdditionalData::empty(),
         },
     );

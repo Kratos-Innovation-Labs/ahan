@@ -120,8 +120,8 @@ use concordium_cis2::*;
 use concordium_std::{collections::BTreeMap, EntrypointName, *};
 
 /// List of supported standards by this contract address.
-// const SUPPORTS_STANDARDS: [StandardIdentifier<'static>; 2] =
-//     [CIS0_STANDARD_IDENTIFIER, CIS2_STANDARD_IDENTIFIER];
+const SUPPORTS_STANDARDS: [StandardIdentifier<'static>; 2] =
+    [CIS0_STANDARD_IDENTIFIER, CIS2_STANDARD_IDENTIFIER];
 
 /// List of supported entrypoints by the `permit` function (CIS3 standard).
 const SUPPORTS_PERMIT_ENTRYPOINTS: [EntrypointName; 2] = [
@@ -508,7 +508,13 @@ pub struct State<S = StateApi> {
     nonces_registry: StateMap<AccountAddress, u64, S>,
     /// Address of the contract which is which can call the `mint` and `burn` methods
     /// Set during initiazation and cannot be changed.
-    vault_address: ContractAddress,
+    vault_address: Option<ContractAddress>,
+    /// Once the vaults are deployed, the vault address is set by the user  
+    /// who initialized the contract. Once set, the address is useless.
+    vault_address_setter: AccountAddress,
+    /// If not connected to vault, it wont check if the contract is called by the
+    /// vault contract or not.
+    is_connected_to_vault: bool,
 }
 /// The different errors the contract can produce.
 #[derive(Serialize, Debug, PartialEq, Eq, Reject, SchemaType)]
@@ -562,7 +568,13 @@ pub enum CustomContractError {
     /// Failed to grant role because it was granted already in the first place.
     RoleWasAlreadyGranted, // -21
     /// When an unexpected call calls the contract
-    UnauthorizedCaller,
+    UnauthorizedCaller, // -22
+    /// When methods are called without setting the vaults address
+    VaultAddressNotSet, // -23
+    /// When method cannot be called by another contract
+    CannotBeCalledByContract, // -24
+    // Vault address can only be added once and is immutable afterwards
+    VaultAddressIsImmutable, // -25
 }
 
 pub type ContractError = Cis2Error<CustomContractError>;
@@ -617,13 +629,19 @@ impl From<CustomContractError> for ContractError {
 
 impl State {
     /// Construct a state with no tokens
-    fn empty(state_builder: &mut StateBuilder, vault_address: ContractAddress) -> Self {
+    fn empty(
+        state_builder: &mut StateBuilder,
+        initializer: AccountAddress,
+        is_connected_to_vault: bool,
+    ) -> Self {
         State {
             state: state_builder.new_map(),
             tokens: state_builder.new_map(),
             implementors: state_builder.new_map(),
             nonces_registry: state_builder.new_map(),
-            vault_address,
+            vault_address: None,
+            vault_address_setter: initializer,
+            is_connected_to_vault,
         }
     }
 
@@ -747,6 +765,56 @@ impl State {
 
         Ok(())
     }
+
+    /// Check if an address is an operator of a given owner address.
+    fn is_operator(&self, address: &Address, owner: &Address) -> bool {
+        self.state
+            .get(owner)
+            .map(|address_state| address_state.operators.contains(address))
+            .unwrap_or(false)
+    }
+
+    /// Update the state adding a new operator for a given address.
+    /// Succeeds even if the `operator` is already an operator for the
+    /// `address`.
+    fn add_operator(
+        &mut self,
+        owner: &Address,
+        operator: &Address,
+        state_builder: &mut StateBuilder,
+    ) {
+        let mut owner_state = self
+            .state
+            .entry(*owner)
+            .or_insert_with(|| AddressState::empty(state_builder));
+        owner_state.operators.insert(*operator);
+    }
+
+    /// Update the state removing an operator for a given address.
+    /// Succeeds even if the `operator` is not an operator for the `address`.
+    fn remove_operator(&mut self, owner: &Address, operator: &Address) {
+        self.state.entry(*owner).and_modify(|address_state| {
+            address_state.operators.remove(operator);
+        });
+    }
+
+    /// Check if state contains any implementors for a given standard.
+    fn have_implementors(&self, std_id: &StandardIdentifierOwned) -> SupportResult {
+        if let Some(addresses) = self.implementors.get(std_id) {
+            SupportResult::SupportBy(addresses.to_vec())
+        } else {
+            SupportResult::NoSupport
+        }
+    }
+
+    /// Set implementors for a given standard.
+    fn set_implementors(
+        &mut self,
+        std_id: StandardIdentifierOwned,
+        implementors: Vec<ContractAddress>,
+    ) {
+        self.implementors.insert(std_id, implementors);
+    }
 }
 
 /// Convert the address into its canonical account address (in case it is an
@@ -771,7 +839,7 @@ fn _get_canonical_address(address: Address) -> ContractResult<Address> {
 #[init(
     contract = "cis2_multi",
     event = "Cis2Event<ContractTokenId, ContractTokenAmount>",
-    parameter = "ContractAddress",
+    parameter = "bool",
     enable_logger
 )]
 fn contract_init(
@@ -781,7 +849,7 @@ fn contract_init(
 ) -> InitResult<State> {
     // Construct the initial contract state.
     let params = ctx.parameter_cursor().get()?;
-    let state = State::empty(state_builder, params);
+    let state = State::empty(state_builder, ctx.init_origin(), params);
 
     Ok(state)
 }
@@ -798,6 +866,9 @@ pub struct ViewState {
     pub tokens: Vec<ContractTokenId>,
     pub nonces_registry: Vec<(AccountAddress, u64)>,
     pub implementors: Vec<(StandardIdentifierOwned, Vec<ContractAddress>)>,
+    pub vault_address: Option<ContractAddress>,
+    pub vault_address_setter: AccountAddress,
+    pub is_connected_to_vault: bool,
 }
 
 /// View function for testing. This reports on the entire state of the contract
@@ -853,6 +924,9 @@ fn contract_view(_ctx: &ReceiveContext, host: &Host<State>) -> ReceiveResult<Vie
         tokens,
         nonces_registry,
         implementors,
+        vault_address: state.vault_address,
+        vault_address_setter: state.vault_address_setter,
+        is_connected_to_vault: state.is_connected_to_vault,
     })
 }
 
@@ -893,6 +967,44 @@ fn mint(
     Ok(())
 }
 
+#[receive(
+    contract = "cis2_multi",
+    name = "set_vault",
+    parameter = "ContractAddress",
+    error = "ContractError",
+    enable_logger,
+    mutable
+)]
+fn contract_set_vault(
+    ctx: &ReceiveContext,
+    host: &mut Host<State>,
+    _logger: &mut impl HasLogger,
+) -> ContractResult<()> {
+    // Parse the parameter.
+    let params: ContractAddress = ctx.parameter_cursor().get()?;
+
+    let (state, _builder) = host.state_and_builder();
+
+    let sender = match ctx.sender() {
+        Address::Account(acc) => acc,
+        Address::Contract(_) => bail!(concordium_cis2::Cis2Error::Custom(
+            CustomContractError::UnauthorizedCaller
+        )),
+    };
+
+    if state.vault_address_setter != sender {
+        return Err(CustomContractError::UnauthorizedCaller)?;
+    }
+
+    if state.vault_address.is_some() {
+        return Err(CustomContractError::VaultAddressIsImmutable)?;
+    }
+
+    state.vault_address = Some(params);
+
+    Ok(())
+}
+
 /// Mint/Airdrops the fixed amount of `MINT_AIRDROP` of new tokens to the
 /// `owner` address. ATTENTION: Can be called by anyone. You should add your
 /// custom access control to this function and the permit function.
@@ -922,6 +1034,22 @@ fn contract_mint(
 ) -> ContractResult<()> {
     // Parse the parameter.
     let params: MintParams = ctx.parameter_cursor().get()?;
+
+    if host.state.is_connected_to_vault {
+        let sender = match ctx.sender() {
+            Address::Contract(acc) => acc,
+            Address::Account(_) => return Err(CustomContractError::ContractOnly)?,
+        };
+
+        if let Some(vault_addr) = host.state.vault_address {
+            ensure!(
+                vault_addr == sender,
+                concordium_cis2::Cis2Error::Custom(CustomContractError::UnauthorizedCaller)
+            );
+        } else {
+            return Err(CustomContractError::VaultAddressNotSet)?;
+        }
+    }
 
     // // Get the sender who invoked this contract function. (comment in if you want
     // // only the MINTER role to mint tokens)
@@ -987,14 +1115,21 @@ fn contract_burn(
     // Parse the parameter.
     let params: BurnParams = ctx.parameter_cursor().get()?;
 
-    // Get the sender who invoked this contract function.
-    let _sender = ctx.sender();
+    if host.state.is_connected_to_vault {
+        let sender = match ctx.sender() {
+            Address::Contract(acc) => acc,
+            Address::Account(_) => return Err(CustomContractError::ContractOnly)?,
+        };
 
-    // // Authenticate the sender for the token burns.
-    // ensure!(
-    //     params.owner == sender,
-    //     ContractError::Unauthorized
-    // );
+        if let Some(vault_addr) = host.state.vault_address {
+            ensure!(
+                vault_addr == sender,
+                concordium_cis2::Cis2Error::Custom(CustomContractError::UnauthorizedCaller)
+            );
+        } else {
+            return Err(CustomContractError::VaultAddressNotSet)?;
+        }
+    }
 
     burn(params, host, logger)?;
 
@@ -1552,20 +1687,20 @@ fn contract_on_cis2_received(ctx: &ReceiveContext, host: &Host<State>) -> Contra
 )]
 fn contract_supports(
     ctx: &ReceiveContext,
-    _host: &Host<State>,
+    host: &Host<State>,
 ) -> ContractResult<SupportsQueryResponse> {
     // Parse the parameter.
     let params: SupportsQueryParams = ctx.parameter_cursor().get()?;
 
     // Build the response.
-    let response = Vec::with_capacity(params.queries.len());
-    // for std_id in params.queries {
-    //     if SUPPORTS_STANDARDS.contains(&std_id.as_standard_identifier()) {
-    //         response.push(SupportResult::Support);
-    //     } else {
-    //         response.push(host.state().have_implementors(&std_id));
-    //     }
-    // }
+    let mut response = Vec::with_capacity(params.queries.len());
+    for std_id in params.queries {
+        if SUPPORTS_STANDARDS.contains(&std_id.as_standard_identifier()) {
+            response.push(SupportResult::Support);
+        } else {
+            response.push(host.state().have_implementors(&std_id));
+        }
+    }
     let result = SupportsQueryResponse::from(response);
     Ok(result)
 }
@@ -1657,10 +1792,14 @@ fn contract_upgrade(ctx: &ReceiveContext, host: &mut LowLevelHost) -> ContractRe
         Address::Contract(acc) => acc,
     };
 
-    ensure!(
-        sender == state.vault_address,
-        concordium_cis2::Cis2Error::Custom(CustomContractError::UnauthorizedCaller)
-    );
+    let vault_address = state
+        .vault_address
+        .ok_or(CustomContractError::VaultAddressNotSet)?;
+
+    // ensure!(
+    //     sender == vault_address,
+    //     concordium_cis2::Cis2Error::Custom(CustomContractError::UnauthorizedCaller)
+    // );
 
     // Parse the parameter.
     let params: UpgradeParams = ctx.parameter_cursor().get()?;
@@ -1675,5 +1814,121 @@ fn contract_upgrade(ctx: &ReceiveContext, host: &mut LowLevelHost) -> ContractRe
             Amount::zero(),
         )?;
     }
+    Ok(())
+}
+
+/// Internal `updateOperator/permit` helper function. Invokes the
+/// `add_operator/remove_operator` function of the state.
+/// Logs a `UpdateOperator` event. The function assumes that the sender is
+/// authorized to do the `updateOperator` action.
+fn update_operator(
+    update: OperatorUpdate,
+    sender: Address,
+    operator: Address,
+    state: &mut State,
+    builder: &mut StateBuilder,
+    logger: &mut impl HasLogger,
+) -> ContractResult<()> {
+    // Update the operator in the state.
+    match update {
+        OperatorUpdate::Add => state.add_operator(&sender, &operator, builder),
+        OperatorUpdate::Remove => state.remove_operator(&sender, &operator),
+    }
+
+    // Log the appropriate event
+    logger.log(
+        &Cis2Event::<ContractTokenId, ContractTokenAmount>::UpdateOperator(UpdateOperatorEvent {
+            owner: sender,
+            operator,
+            update,
+        }),
+    )?;
+
+    Ok(())
+}
+
+/// Enable or disable addresses as operators of the sender address.
+/// Logs an `UpdateOperator` event.
+///
+/// It rejects if:
+/// - It fails to parse the parameter.
+/// - Fails to log event.
+#[receive(
+    contract = "cis2_multi",
+    name = "updateOperator",
+    parameter = "UpdateOperatorParams",
+    error = "ContractError",
+    enable_logger,
+    mutable
+)]
+fn contract_update_operator(
+    ctx: &ReceiveContext,
+    host: &mut Host<State>,
+    logger: &mut impl HasLogger,
+) -> ContractResult<()> {
+    // Parse the parameter.
+    let UpdateOperatorParams(params) = ctx.parameter_cursor().get()?;
+    // Get the sender who invoked this contract function.
+    let sender = ctx.sender();
+    let (state, builder) = host.state_and_builder();
+    for param in params {
+        update_operator(param.update, sender, param.operator, state, builder, logger)?;
+    }
+    Ok(())
+}
+
+/// Takes a list of queries. Each query is an owner address and some address to
+/// check as an operator of the owner address.
+///
+/// It rejects if:
+/// - It fails to parse the parameter.
+#[receive(
+    contract = "cis2_multi",
+    name = "operatorOf",
+    parameter = "OperatorOfQueryParams",
+    return_value = "OperatorOfQueryResponse",
+    error = "ContractError"
+)]
+fn contract_operator_of(
+    ctx: &ReceiveContext,
+    host: &Host<State>,
+) -> ContractResult<OperatorOfQueryResponse> {
+    // Parse the parameter.
+    let params: OperatorOfQueryParams = ctx.parameter_cursor().get()?;
+    // Build the response.
+    let mut response = Vec::with_capacity(params.queries.len());
+    for query in params.queries {
+        // Query the state for address being an operator of owner.
+        let is_operator = host.state().is_operator(&query.address, &query.owner);
+        response.push(is_operator);
+    }
+    let result = OperatorOfQueryResponse::from(response);
+    Ok(result)
+}
+
+/// Set the addresses for an implementation given a standard identifier and a
+/// list of contract addresses.
+///
+/// It rejects if:
+/// - Sender is not the owner of the contract instance.
+/// - It fails to parse the parameter.
+#[receive(
+    contract = "cis2_multi",
+    name = "setImplementors",
+    parameter = "SetImplementorsParams",
+    error = "ContractError",
+    mutable
+)]
+fn contract_set_implementor(ctx: &ReceiveContext, host: &mut Host<State>) -> ContractResult<()> {
+    // Authorize the sender.
+    ensure!(
+        ctx.sender().matches_account(&ctx.owner()),
+        ContractError::Unauthorized
+    );
+    // Parse the parameter.
+    let params: SetImplementorsParams = ctx.parameter_cursor().get()?;
+    // Update the implementors in the state
+    host.state_mut()
+        .set_implementors(params.id, params.implementors);
     Ok(())
 }

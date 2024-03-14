@@ -1,0 +1,13 @@
+{
+  "to": {
+    "Account": ["4ev4739kgKxpLeLMMUAMRGzYf1W2xA9XDR3jdo33ymghVeSd3K"]
+  },
+  "metadata_url": {
+    "url": "https://github.com",
+    "hash": {
+      "None": []
+    }
+  },
+  "token_id": "01",
+  "amount": "10000"
+}

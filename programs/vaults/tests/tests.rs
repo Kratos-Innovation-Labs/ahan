@@ -1,4 +1,4 @@
-use concordium_cis2::TokenIdU8;
+use concordium_cis2::{OperatorUpdate, TokenIdU8, UpdateOperator, UpdateOperatorParams};
 use concordium_smart_contract_testing::*;
 use concordium_std::MetadataUrl;
 use mint_tokens::*;
@@ -210,6 +210,30 @@ fn test_init() {
         concordium_cis2::TokenAmountU64(DEPOSIT_AMOUNT)
     );
     assert_eq!(user_deposit_balance, &DEPOSIT_AMOUNT);
+
+     // Create input parameters for the `permit` updateOperator function.
+     let update_operator = UpdateOperator {
+        update:   OperatorUpdate::Add,
+        operator: concordium_std::Address::Account(ACC_ADDR_OTHER),
+    };
+    let payload = UpdateOperatorParams(vec![update_operator]);
+
+    let update = chain
+    .contract_update(
+        Signer::with_one_key(),
+        ACC_ADDR_OTHER,
+        Address::Account(ACC_ADDR_OTHER),
+        Energy::from(100000),
+        UpdateContractPayload {
+            amount: Amount::zero(),
+            address: vaults_init.contract_address,
+            receive_name: OwnedReceiveName::new_unchecked("vaults.updateOperator".to_string()),
+            message: OwnedParameter::from_serial(&payload).unwrap(),
+        },
+    )
+    .print_emitted_events();
+
+    
 
     let update = chain
         .contract_update(

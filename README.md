@@ -4,6 +4,7 @@ Ahan is a Liquid Staking Solution that enables staking of stablecoins against Re
 # Smart contracts
 
 Contract Address: 8382
+node_url: node.testnet.concordium.com
 
 ## Methods
 

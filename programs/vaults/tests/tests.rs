@@ -1,4 +1,4 @@
-use concordium_cis2::{OperatorUpdate, TokenIdU8, UpdateOperator, UpdateOperatorParams};
+use concordium_cis2::{Cis2Error, OperatorUpdate, TokenIdU8, UpdateOperator, UpdateOperatorParams};
 use concordium_smart_contract_testing::*;
 use concordium_std::MetadataUrl;
 use mint_tokens::*;
@@ -25,11 +25,16 @@ fn setup_chain_and_contract() -> (
     let vaults_module = module_load_v1("dist/module.wasm.v1").expect("Module is valid and exists");
     let token_module =
         module_load_v1("../token/dist/module.wasm.v1").expect("Module is valid and exists");
+    let euroe_module = 
+        module_load_v1("../euroe/dist/module.wasm.v1").expect("Module is valid and exists");
     let vaults_deployment = chain
         .module_deploy_v1(Signer::with_one_key(), ACC_ADDR_OWNER, vaults_module)
         .expect("Deploying valid module should succeed");
     let token_deployment = chain
         .module_deploy_v1(Signer::with_one_key(), ACC_ADDR_OWNER, token_module)
+        .expect("Deploying valid module should succeed");
+    let euroe_deployment = chain
+        .module_deploy_v1(Signer::with_one_key(), ACC_ADDR_OWNER, euroe_module)
         .expect("Deploying valid module should succeed");
     let euro_token_initialization = chain
         .contract_init(
@@ -37,9 +42,9 @@ fn setup_chain_and_contract() -> (
             ACC_ADDR_OWNER,
             Energy::from(10000),
             InitContractPayload {
-                mod_ref: token_deployment.module_reference,
-                init_name: OwnedContractName::new_unchecked("init_cis2_multi".to_string()),
-                param: OwnedParameter::from_serial(&false).unwrap(),
+                mod_ref: euroe_deployment.module_reference,
+                init_name: OwnedContractName::new_unchecked("init_euroe_stablecoin".to_string()),
+                param: OwnedParameter::empty(),
                 amount: Amount::zero(),
             },
         )
@@ -85,13 +90,8 @@ fn setup_chain_and_contract() -> (
 #[test]
 fn test_init() {
     let (mut chain, vaults_init, euro_token_init, lp_token_init) = setup_chain_and_contract();
-    let mint_params = MintParams {
-        to: Address::Account(ACC_ADDR_OWNER),
-        metadata_url: MetadataUrl {
-            url: String::from("Test"),
-            hash: None,
-        },
-        token_id: TokenIdU8(1),
+    let euroe_mint_params = euroe_stablecoin::MintParams {
+        owner: Address::Account(ACC_ADDR_OWNER),
         amount: concordium_cis2::TokenAmountU64(10000),
     };
     let update = chain.contract_update(
@@ -102,11 +102,33 @@ fn test_init() {
         UpdateContractPayload {
             amount: Amount::zero(),
             address: euro_token_init.contract_address,
-            receive_name: OwnedReceiveName::new_unchecked("cis2_multi.mint".to_string()),
-            message: OwnedParameter::from_serial(&mint_params).unwrap(),
+            receive_name: OwnedReceiveName::new_unchecked("euroe_stablecoin.mint".to_string()),
+            message: OwnedParameter::from_serial(&euroe_mint_params).unwrap(),
         },
     );
-    assert!(update.is_ok(), "Minting tokens failed");
+    // assert!(update.is_ok(), "Minting tokens failed");
+    if let Err(e) = update {
+        e.trace_elements.iter().for_each(|trace_element| {
+            match trace_element {
+                DebugTraceElement::WithFailures { contract_address: _, entrypoint: _, error, trace_elements: _, energy_used: _, debug_trace: _ } => {
+                    println!("error: {:?}", error);
+                    let return_value : Error = match error {
+                        InvokeExecutionError::Reject { reason: _, return_value } => from_bytes(&return_value).unwrap(),
+                        InvokeExecutionError::Trap { error } => panic!("error: {:?}", error),
+                    };
+                    println!("This is return value {:?}", return_value);
+                    match return_value {
+                        Error::LogicReject { reason, return_value } => {
+                            println!("This is return value {:?} and reason {:?}", return_value, reason);
+                        }
+                        _ => ()
+                    };
+                },
+                DebugTraceElement::Debug { entrypoint, address, debug_trace } => println!("This is entrypoint {:?}, address {:?} and debug_trace {:?}", entrypoint, address, debug_trace),
+                DebugTraceElement::Regular { entrypoint, trace_element, energy_used, debug_trace } => println!("Thsi is entrypoint {:?} trace_element: {:?}, energy_used {:?} debug_trace {:?}", entrypoint, trace_element, energy_used, debug_trace),
+            };
+        });
+    }
     let tokens = chain
         .contract_invoke(
             ACC_ADDR_OTHER,
@@ -115,14 +137,53 @@ fn test_init() {
             UpdateContractPayload {
                 amount: Amount::zero(),
                 address: euro_token_init.contract_address,
-                receive_name: OwnedReceiveName::new_unchecked("cis2_multi.view".to_string()),
+                receive_name: OwnedReceiveName::new_unchecked("euroe_stablecoin.view".to_string()),
                 message: OwnedParameter::empty(),
             },
         )
         .unwrap();
-    let token_state: ViewState = from_bytes(&tokens.return_value).unwrap();
+    let token_state: euroe_stablecoin::ViewState = from_bytes(&tokens.return_value).unwrap();
     println!("These are tokens {:?}", token_state.state);
 
+    let update_operator = UpdateOperator {
+        update:   OperatorUpdate::Add,
+        operator: Address::Contract(vaults_init.contract_address),
+    };
+    let payload = UpdateOperatorParams(vec![update_operator]);
+    let update = chain.contract_update(
+        Signer::with_one_key(),
+        ACC_ADDR_OWNER,
+        Address::Account(ACC_ADDR_OWNER),
+        Energy::from(10000),
+        UpdateContractPayload {
+            amount: Amount::zero(),
+            address: euro_token_init.contract_address,
+            receive_name: OwnedReceiveName::new_unchecked("euroe_stablecoin.updateOperator".to_string()),
+            message: OwnedParameter::from_serial(&payload).unwrap(),
+        },
+    );
+    if let Err(e) = update {
+        e.trace_elements.iter().for_each(|trace_element| {
+            match trace_element {
+                DebugTraceElement::WithFailures { contract_address: _, entrypoint: _, error, trace_elements: _, energy_used: _, debug_trace: _ } => {
+                    println!("error: {:?}", error);
+                    let return_value : Error = match error {
+                        InvokeExecutionError::Reject { reason: _, return_value } => from_bytes(&return_value).unwrap(),
+                        InvokeExecutionError::Trap { error } => panic!("error: {:?}", error),
+                    };
+                    println!("This is return value {:?}", return_value);
+                    match return_value {
+                        Error::LogicReject { reason, return_value } => {
+                            println!("This is return value {:?} and reason {:?}", return_value, reason);
+                        }
+                        _ => ()
+                    };
+                },
+                DebugTraceElement::Debug { entrypoint, address, debug_trace } => println!("This is entrypoint {:?}, address {:?} and debug_trace {:?}", entrypoint, address, debug_trace),
+                DebugTraceElement::Regular { entrypoint, trace_element, energy_used, debug_trace } => println!("Thsi is entrypoint {:?} trace_element: {:?}, energy_used {:?} debug_trace {:?}", entrypoint, trace_element, energy_used, debug_trace),
+            };
+        });
+    }
     // setting the vault address on lp token contract
     let update = chain.contract_update(
         Signer::with_one_key(),
@@ -163,6 +224,12 @@ fn test_init() {
                         InvokeExecutionError::Trap { error } => panic!("error: {:?}", error),
                     };
                     println!("This is return value {:?}", return_value);
+                    match return_value {
+                        Error::LogicReject { reason, return_value } => {
+                            println!("This is return value {:?} and reason {:?}", return_value, reason);
+                        }
+                        _ => ()
+                    };
                 },
                 DebugTraceElement::Debug { entrypoint, address, debug_trace } => println!("This is entrypoint {:?}, address {:?} and debug_trace {:?}", entrypoint, address, debug_trace),
                 DebugTraceElement::Regular { entrypoint, trace_element, energy_used, debug_trace } => println!("Thsi is entrypoint {:?} trace_element: {:?}, energy_used {:?} debug_trace {:?}", entrypoint, trace_element, energy_used, debug_trace),

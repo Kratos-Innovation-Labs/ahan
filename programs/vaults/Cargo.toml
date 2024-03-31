@@ -15,6 +15,7 @@ bump_alloc = ["concordium-std/bump_alloc"]
 concordium-std.workspace = true
 concordium-cis2.workspace = true
 mint_tokens.workspace = true
+euroe_stablecoin.workspace = true
 
 [dev-dependencies]
 concordium-smart-contract-testing.workspace = true

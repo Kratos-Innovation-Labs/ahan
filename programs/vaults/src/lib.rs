@@ -238,7 +238,7 @@ fn deposit(
 
 #[receive(contract = "vaults", name = "depositIntoContract", mutable)]
 fn deposit_into_contract(ctx: &ReceiveContext, host: &mut Host<State>) -> ReceiveResult<()> {
-    let params: OnReceivingCis2Params<TokenIdU8, TokenAmountU64> = ctx.parameter_cursor().get()?;
+    let params: OnReceivingCis2Params<TokenIdUnit, TokenAmountU64> = ctx.parameter_cursor().get()?;
     let (state, _builder) = host.state_and_builder();
 
     ensure!(params.from.is_account());
@@ -538,12 +538,58 @@ fn deposit_impl(
     _logger: &mut impl HasLogger,
 ) -> ReceiveResult<()> {
     // let state = host.state.clone();
-    let cis2_client = Cis2Client::new(host.state.euro_e_token_contract);
+    let euroe_contract = host.state.euro_e_token_contract;
+    let cis2_client = Cis2Client::new(euroe_contract);
     ensure!(sender.is_account());
     let sender = match sender {
         Address::Account(acc) => acc,
         Address::Contract(_) => bail!(),
     };
+    // // Updating operator for the user
+    // let update_operator_res = cis2_client.operator_of::<State, ()>(
+    //     host,
+    //     concordium_std::Address::Contract(contract_address),
+    //     concordium_std::Address::Account(sender),
+    // );
+    // if let Err(val) = update_operator_res {
+    //     // logger.log_raw("Errored out here".as_bytes())?;
+    //     concordium_dbg!("This is the error {:?}", val);
+    //     bail!(Error::from(val).into());
+    // } else if let Ok(val) = update_operator_res {
+    //     if !val {
+    //         // let res = cis2_client.update_operator::<State, ()>(
+    //         //     host,
+    //         //     concordium_std::Address::Contract(contract_address),
+    //         //     OperatorUpdate::Add,
+    //         // );
+    //         let params = UpdateOperator {
+    //             update: OperatorUpdate::Add,
+    //             operator: concordium_std::Address::Contract(contract_address),
+    //         };
+    //         let update_operator_params = UpdateOperatorParams(vec![params]);
+    //         let res = host.invoke_contract(
+    //             &euroe_contract,
+    //             &update_operator_params,
+    //             EntrypointName::new("updateOperator").unwrap(),
+    //             Amount::zero(),
+    //         );
+    //         let _res = match res {
+    //             Ok(val) => {
+    //                 let o = match val.1 {
+    //                     Some(res) => Some(res),
+    //                     None => None,
+    //                 };
+    //                 (val.0, o)
+    //             }
+    //             Err(err) => {
+    //                 return Err(Error::from(
+    //                     Cis2ClientError::<()>::try_from(err).map_err(|err| Error::from(err))?,
+    //                 )
+    //                 .into())
+    //             }
+    //         };
+    //     }
+    // }
     // Transfer tokens to the contract
     let res: Cis2ClientResult<bool> = cis2_client.transfer(
         host,
@@ -554,7 +600,7 @@ fn deposit_impl(
                 contract_address,
                 OwnedEntrypointName::new(String::from("depositIntoContract")).unwrap(),
             ),
-            token_id: TokenIdU8(0),
+            token_id: TokenIdUnit(),
             data: AdditionalData::empty(),
         },
     );
@@ -619,7 +665,7 @@ fn withdraw_impl(
             amount: TokenAmountU64(amount),
             from: Address::Contract(contract_address),
             to: Receiver::Account(sender),
-            token_id: TokenIdU8(0),
+            token_id: TokenIdUnit(),
             data: AdditionalData::empty(),
         },
     );

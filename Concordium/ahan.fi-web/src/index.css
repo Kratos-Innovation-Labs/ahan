@@ -1,0 +1,46 @@
+:root {
+  font-family: Manrope, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu,
+    Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  color-scheme: light dark;
+  color: #273852;
+  background-color: #f2f4f6;
+  --color-primary: #00a3ff;
+  --color-primarycontrast: #fff;
+  --lido-color-textSecondary: #7a8aa0;
+  --lido-color-foreground: #fff;
+  --lido-color-controlBg: #fff;
+  --lido-color-border: rgba(0, 10, 61, 0.12);
+  --lido-color-text: #273852;
+  --lido-color-primary: #00a3ff;
+  --lido-color-success: #53ba95;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Manrope, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu,
+    Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}

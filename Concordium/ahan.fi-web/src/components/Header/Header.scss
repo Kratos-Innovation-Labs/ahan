@@ -1,0 +1,25 @@
+.header {
+  .wrapper {
+    position: relative;
+    padding: 18px 32px;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.button-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.account-buttons {
+  background: rgb(210, 208, 208);
+  padding: 10px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}

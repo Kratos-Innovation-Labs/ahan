@@ -1,0 +1,146 @@
+.home-page {
+  .wrapper {
+    position: relative;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    box-sizing: border-box;
+    margin: 0px auto;
+    min-width: 320px;
+    width: 100%;
+    padding: 0px 32px 32px;
+    max-width: 560px;
+
+    .stake-container {
+      h2 {
+        font-weight: 800;
+        font-size: 26px;
+        margin-bottom: 0.2em;
+        line-height: 1.2em;
+        text-align: center;
+      }
+
+      .description {
+        font-weight: 500;
+        color: var(--lido-color-textSecondary);
+        margin-bottom: 16px;
+        font-size: 12px;
+        line-height: 1.5em;
+        text-align: center;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+
+        @media (max-width: 600px) {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        display: flex;
+        flex-direction: column;
+        row-gap: 16px;
+        font-weight: 400;
+        font-size: 12px;
+        line-height: 1.6em;
+        border-radius: 20px;
+        margin: 0px;
+        padding: 32px;
+        box-shadow: none;
+        background: var(--lido-color-foreground);
+        color: var(--lido-color-textSecondary);
+
+        .input-wrapper {
+          position: relative;
+          display: flex;
+          -webkit-box-flex: 1;
+          flex-grow: 1;
+          padding: 17px 15px;
+          font-weight: 400;
+          font-size: 14px;
+          border-width: 1px;
+          border-style: solid;
+          border-image: initial;
+          border-radius: 10px;
+          transition: border-color 100ms ease 0s;
+          background: var(--lido-color-controlBg);
+          border-color: var(--lido-color-border);
+          color: var(--lido-color-text);
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+
+          input {
+            font-size: 16px;
+            color: var(--lido-color-text);
+            background-color: transparent;
+            outline: none;
+            border: none;
+            width: 100%;
+            font-family: inherit;
+
+            &::placeholder {
+              color: var(--lido-color-textSecondary);
+            }
+          }
+
+          button {
+            box-sizing: border-box;
+            margin: 0px;
+            border: none;
+            outline: none;
+            white-space: nowrap;
+            overflow: hidden;
+            position: relative;
+            background: transparent;
+            font-family: inherit;
+            font-weight: 700;
+            width: auto;
+            line-height: 1em;
+            font-size: 10px;
+            border-radius: 6px;
+            padding: 11px 16px;
+            min-width: 50px;
+            color: var(--lido-color-primary);
+            line-height: 1em;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+        }
+
+        .stats {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+
+          > div {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+
+            span {
+              font-weight: 400;
+              font-size: 12px;
+              line-height: 1.6em;
+            }
+          }
+        }
+      }
+
+      .section-2 {
+        margin-top: 24px;
+
+        h4 {
+          margin-bottom: 10px;
+          font-weight: 800;
+          font-size: 18px;
+          line-height: 1.3em;
+        }
+      }
+    }
+  }
+}

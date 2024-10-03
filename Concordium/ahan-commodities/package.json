@@ -1,0 +1,14 @@
+{
+	"name": "concordium-rwa",
+	"version": "1.0.0",
+	"repository": "git@github.com:chainorders/concordium-rwa.git",
+	"author": "Parv Sharma <parv@stactrace.com>",
+	"private": true,
+	"workspaces": [
+		"contracts",
+		"frontend-dapp",
+		"backend",
+		"cdk-deployment"
+	],
+	"packageManager": "yarn@4.5.0"
+}
